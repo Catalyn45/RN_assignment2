@@ -4,6 +4,7 @@ import pickle
 from dataclasses import dataclass
 import random
 from scipy.special import softmax
+import matplotlib.pyplot as plt
 
 
 @dataclass()
@@ -21,7 +22,7 @@ def train(model, train_set, test_set, learning_rate=0.09, max_iterations=-1):
     samples = list(zip(images, labels))
 
     all_classified = False
-    iterations = 0
+    epoch = 0
 
     while not all_classified:
         all_classified = True
@@ -35,24 +36,33 @@ def train(model, train_set, test_set, learning_rate=0.09, max_iterations=-1):
 
             output = softmax(z) if USE_SOFTMAX else numpy.vectorize(activation)(z)
 
-            model.perceptrons = model.perceptrons + numpy.multiply(image.reshape((1, 784)).repeat(10, axis=0),
-                                                                   ((t - output) * learning_rate)[:, numpy.newaxis])
+            model.perceptrons = model.perceptrons + image * ((t - output) * learning_rate)[:, numpy.newaxis]
             model.bias = model.bias + (t - output) * learning_rate
 
-            if not numpy.argmax(output) == numpy.argmax(t):
+            max_indices = numpy.where(output == output.max())[0]
+
+            max_index = max_indices[0]
+
+            for i in range(1, len(max_indices)):
+                if z[max_indices[i]] > z[max_index]:
+                    max_index = i
+
+            if max_index != label:
                 all_classified = False
 
-        test(model, test_set, iterations)
+        rate = test(model, test_set)
+        print(f'Epoch: {epoch} accuracy: {round(rate * 100, 2)} %')
 
-        if max_iterations != -1 and iterations >= max_iterations:
+        if max_iterations != -1 and epoch >= max_iterations:
             break
 
-        iterations += 1
+        learning_rate *= .98
+        epoch += 1
 
     print("Training complete")
 
 
-def test(model, test_set, epoch):
+def test(model, test_set):
     success = 0
     failed = 0
 
@@ -63,12 +73,22 @@ def test(model, test_set, epoch):
 
         outputs = softmax(z) if USE_SOFTMAX else numpy.vectorize(activation)(z)
 
-        if numpy.argmax(outputs) == label:
+        max_indices = numpy.where(outputs == outputs.max())[0]
+
+        max_index = max_indices[0]
+
+        for i in range(1, len(max_indices)):
+            if z[max_indices[i]] > z[max_index]:
+                max_index = i
+
+        if max_index == label:
             success += 1
         else:
             failed += 1
 
-    print(f'Epoch: {epoch} success rate: {round(success / (success + failed) * 100)}%')
+    rate = success / (success + failed)
+
+    return rate
 
 
 def get_datasets(file_name):
@@ -76,7 +96,7 @@ def get_datasets(file_name):
         return pickle.load(file, encoding='latin')
 
 
-USE_SOFTMAX = False
+USE_SOFTMAX = True
 
 
 def main():
@@ -84,8 +104,9 @@ def main():
 
     model = Model()
 
-    train(model, train_set, valid_set, learning_rate=0.003, max_iterations=50)
+    train(model, train_set, valid_set, learning_rate=0.001)
 
 
 if __name__ == '__main__':
     main()
+
